@@ -114,9 +114,8 @@
       <!-- グレード -->
       <div id="field-grade" class="hidden">
         <label class="block text-xs font-medium text-primary mb-1">グレード</label>
-        <select id="grade" class="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm mb-4 bg-white focus:outline-none focus:border-accent" onchange="showFieldAfterGrade()">
-          <option value="">選択してください</option>
-        </select>
+        <input id="grade" type="text" placeholder="例: 350GT HYBRID Type SP" class="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm mb-1 bg-white focus:outline-none focus:border-accent" oninput="showFieldAfterGrade()">
+        <p class="text-[10px] text-muted mb-4">車検証やカタログに記載のグレード名を入力してください</p>
       </div>
 
       <!-- 年式〜写真（グレード選択後に表示） -->
@@ -363,148 +362,312 @@
 
   <script>
     // ========== 車種データベース ==========
+    // P=車種定義: basePrice(万円)のみ。グレードは自由入力、価格補正はAI側で実施
+    const P = (bp) => ({ basePrice: bp });
     const carDatabase = {
-      'トヨタ': {
-        models: {
-          '86': { grades: ['G', 'GT', 'GT Limited', 'GR SPORT'], basePrice: 280, gradeMultiplier: { 'G': 0.85, 'GT': 1.0, 'GT Limited': 1.1, 'GR SPORT': 1.2 } },
-          'GRヤリス': { grades: ['RS', 'RZ', 'RZ High Performance', 'モリゾウエディション'], basePrice: 400, gradeMultiplier: { 'RS': 0.8, 'RZ': 1.0, 'RZ High Performance': 1.15, 'モリゾウエディション': 1.4 } },
-          'スープラ': { grades: ['SZ', 'SZ-R', 'RZ'], basePrice: 550, gradeMultiplier: { 'SZ': 0.8, 'SZ-R': 0.95, 'RZ': 1.15 } },
-          'アルファード': { grades: ['X', 'Z', 'Z Premium', 'Executive Lounge'], basePrice: 500, gradeMultiplier: { 'X': 0.8, 'Z': 1.0, 'Z Premium': 1.15, 'Executive Lounge': 1.5 } },
-          'ヴェルファイア': { grades: ['Z Premier', 'Z Premier Executive Lounge'], basePrice: 480, gradeMultiplier: { 'Z Premier': 1.0, 'Z Premier Executive Lounge': 1.4 } },
-          'ハリアー': { grades: ['S', 'G', 'G Leather Package', 'Z', 'Z Leather Package'], basePrice: 350, gradeMultiplier: { 'S': 0.85, 'G': 1.0, 'G Leather Package': 1.08, 'Z': 1.12, 'Z Leather Package': 1.2 } },
-          'ランドクルーザー': { grades: ['GX', 'AX', 'VX', 'ZX', 'GR SPORT'], basePrice: 700, gradeMultiplier: { 'GX': 0.85, 'AX': 0.95, 'VX': 1.05, 'ZX': 1.2, 'GR SPORT': 1.3 } },
-          'プリウス': { grades: ['X', 'G', 'G HEV', 'Z', 'Z HEV'], basePrice: 250, gradeMultiplier: { 'X': 0.85, 'G': 1.0, 'G HEV': 1.05, 'Z': 1.12, 'Z HEV': 1.18 } },
-          'クラウン': { grades: ['X', 'G', 'G Advanced', 'RS', 'RS Advanced'], basePrice: 450, gradeMultiplier: { 'X': 0.85, 'G': 1.0, 'G Advanced': 1.1, 'RS': 1.15, 'RS Advanced': 1.25 } },
-          'カローラ': { grades: ['X', 'G', 'W×B'], basePrice: 200, gradeMultiplier: { 'X': 0.9, 'G': 1.0, 'W×B': 1.1 } },
-          'ヤリス': { grades: ['X', 'G', 'Z'], basePrice: 180, gradeMultiplier: { 'X': 0.9, 'G': 1.0, 'Z': 1.12 } },
-          'RAV4': { grades: ['X', 'G', 'G Z Package', 'Adventure'], basePrice: 320, gradeMultiplier: { 'X': 0.88, 'G': 1.0, 'G Z Package': 1.1, 'Adventure': 1.15 } },
-          'C-HR': { grades: ['S', 'G', 'G-T'], basePrice: 250, gradeMultiplier: { 'S': 0.9, 'G': 1.0, 'G-T': 1.1 } },
-          'ノア': { grades: ['X', 'G', 'S-G', 'S-Z'], basePrice: 280, gradeMultiplier: { 'X': 0.88, 'G': 1.0, 'S-G': 1.08, 'S-Z': 1.15 } },
-          'ヴォクシー': { grades: ['S-G', 'S-Z'], basePrice: 300, gradeMultiplier: { 'S-G': 1.0, 'S-Z': 1.12 } }
-        }
-      },
-      '日産': {
-        models: {
-          'GT-R': { grades: ['Pure Edition', 'Black Edition', 'Premium Edition', 'NISMO', 'T-spec'], basePrice: 1200, gradeMultiplier: { 'Pure Edition': 0.9, 'Black Edition': 1.0, 'Premium Edition': 1.1, 'NISMO': 1.5, 'T-spec': 1.35 } },
-          'フェアレディZ': { grades: ['ベースグレード', 'Version S', 'Version T', 'Version ST', 'NISMO'], basePrice: 550, gradeMultiplier: { 'ベースグレード': 0.85, 'Version S': 0.95, 'Version T': 1.0, 'Version ST': 1.1, 'NISMO': 1.35 } },
-          'スカイライン': { grades: ['GT', 'GT Type SP', 'GT Type P', '400R'], basePrice: 380, gradeMultiplier: { 'GT': 0.9, 'GT Type SP': 1.0, 'GT Type P': 1.05, '400R': 1.3 } },
-          'ノート': { grades: ['X', 'F', 'S', 'AUTECH'], basePrice: 180, gradeMultiplier: { 'X': 1.0, 'F': 0.88, 'S': 0.92, 'AUTECH': 1.15 } },
-          'セレナ': { grades: ['X', 'XV', 'ハイウェイスター', 'ハイウェイスターV', 'AUTECH', 'NISMO'], basePrice: 300, gradeMultiplier: { 'X': 0.85, 'XV': 0.95, 'ハイウェイスター': 1.0, 'ハイウェイスターV': 1.1, 'AUTECH': 1.15, 'NISMO': 1.2 } },
-          'エクストレイル': { grades: ['S', 'X', 'G', 'AUTECH'], basePrice: 300, gradeMultiplier: { 'S': 0.88, 'X': 1.0, 'G': 1.12, 'AUTECH': 1.18 } },
-          'リーフ': { grades: ['X', 'G', 'e+ X', 'e+ G', 'NISMO'], basePrice: 250, gradeMultiplier: { 'X': 0.9, 'G': 1.0, 'e+ X': 1.15, 'e+ G': 1.25, 'NISMO': 1.2 } },
-          'キックス': { grades: ['X', 'X ツートンインテリアエディション', 'AUTECH'], basePrice: 260, gradeMultiplier: { 'X': 1.0, 'X ツートンインテリアエディション': 1.05, 'AUTECH': 1.12 } },
-          'アリア': { grades: ['B6', 'B6 Limited', 'B9', 'B9 e-4ORCE'], basePrice: 600, gradeMultiplier: { 'B6': 0.88, 'B6 Limited': 1.0, 'B9': 1.1, 'B9 e-4ORCE': 1.25 } }
-        }
-      },
-      'ホンダ': {
-        models: {
-          'シビック タイプR': { grades: ['タイプR'], basePrice: 500, gradeMultiplier: { 'タイプR': 1.0 } },
-          'シビック': { grades: ['LX', 'EX'], basePrice: 300, gradeMultiplier: { 'LX': 0.92, 'EX': 1.08 } },
-          'フィット': { grades: ['BASIC', 'HOME', 'NESS', 'CROSSTAR', 'LUXE', 'RS'], basePrice: 180, gradeMultiplier: { 'BASIC': 0.85, 'HOME': 1.0, 'NESS': 1.05, 'CROSSTAR': 1.1, 'LUXE': 1.12, 'RS': 1.18 } },
-          'ヴェゼル': { grades: ['G', 'X', 'Z', 'PLaY'], basePrice: 280, gradeMultiplier: { 'G': 0.88, 'X': 1.0, 'Z': 1.1, 'PLaY': 1.2 } },
-          'ステップワゴン': { grades: ['AIR', 'SPADA', 'SPADA PREMIUM LINE'], basePrice: 320, gradeMultiplier: { 'AIR': 0.9, 'SPADA': 1.0, 'SPADA PREMIUM LINE': 1.15 } },
-          'フリード': { grades: ['B', 'G', 'CROSSTAR'], basePrice: 240, gradeMultiplier: { 'B': 0.88, 'G': 1.0, 'CROSSTAR': 1.1 } },
-          'N-BOX': { grades: ['ベースグレード', 'L', 'EX', 'Custom L', 'Custom EX'], basePrice: 160, gradeMultiplier: { 'ベースグレード': 0.88, 'L': 1.0, 'EX': 1.08, 'Custom L': 1.12, 'Custom EX': 1.2 } },
-          'S660': { grades: ['α', 'β', 'Modulo X'], basePrice: 220, gradeMultiplier: { 'α': 1.1, 'β': 1.0, 'Modulo X': 1.3 } },
-          'NSX': { grades: ['ベースグレード', 'Type S'], basePrice: 2500, gradeMultiplier: { 'ベースグレード': 1.0, 'Type S': 1.3 } },
-          'ZR-V': { grades: ['X', 'Z'], basePrice: 350, gradeMultiplier: { 'X': 0.92, 'Z': 1.08 } }
-        }
-      },
-      'マツダ': {
-        models: {
-          'ロードスター': { grades: ['S', 'S Special Package', 'S Leather Package', 'RS', 'NR-A'], basePrice: 300, gradeMultiplier: { 'S': 0.88, 'S Special Package': 1.0, 'S Leather Package': 1.08, 'RS': 1.2, 'NR-A': 1.05 } },
-          'RX-7': { grades: ['Type R', 'Type RB', 'Type RS', 'Spirit R'], basePrice: 800, gradeMultiplier: { 'Type R': 1.0, 'Type RB': 1.05, 'Type RS': 1.15, 'Spirit R': 1.5 } },
-          'RX-8': { grades: ['ベースグレード', 'Type S', 'Type RS', 'Spirit R'], basePrice: 200, gradeMultiplier: { 'ベースグレード': 0.85, 'Type S': 1.0, 'Type RS': 1.1, 'Spirit R': 1.3 } },
-          'MAZDA3': { grades: ['15S', '20S', 'X', 'X L Package'], basePrice: 250, gradeMultiplier: { '15S': 0.85, '20S': 1.0, 'X': 1.1, 'X L Package': 1.18 } },
-          'CX-5': { grades: ['S', 'S Proactive', 'L Package', 'Exclusive Mode', 'Sports Appearance'], basePrice: 300, gradeMultiplier: { 'S': 0.88, 'S Proactive': 1.0, 'L Package': 1.1, 'Exclusive Mode': 1.2, 'Sports Appearance': 1.15 } },
-          'CX-8': { grades: ['S', 'S Proactive', 'L Package', 'Exclusive Mode'], basePrice: 350, gradeMultiplier: { 'S': 0.88, 'S Proactive': 1.0, 'L Package': 1.1, 'Exclusive Mode': 1.2 } },
-          'CX-60': { grades: ['25S S Package', '25S L Package', 'XD S Package', 'XD L Package', 'XD Premium Sports', 'PHEV'], basePrice: 400, gradeMultiplier: { '25S S Package': 0.85, '25S L Package': 0.95, 'XD S Package': 1.0, 'XD L Package': 1.1, 'XD Premium Sports': 1.25, 'PHEV': 1.35 } }
-        }
-      },
-      'スバル': {
-        models: {
-          'WRX STI': { grades: ['STI', 'STI Type S', 'STI EJ20 Final Edition'], basePrice: 450, gradeMultiplier: { 'STI': 1.0, 'STI Type S': 1.15, 'STI EJ20 Final Edition': 1.5 } },
-          'WRX S4': { grades: ['GT', 'GT-H', 'STI Sport', 'STI Sport R'], basePrice: 380, gradeMultiplier: { 'GT': 0.9, 'GT-H': 1.0, 'STI Sport': 1.12, 'STI Sport R': 1.2 } },
-          'BRZ': { grades: ['R', 'S', 'STI Sport'], basePrice: 300, gradeMultiplier: { 'R': 0.9, 'S': 1.0, 'STI Sport': 1.15 } },
-          'レヴォーグ': { grades: ['GT', 'GT-H', 'STI Sport', 'STI Sport R'], basePrice: 300, gradeMultiplier: { 'GT': 0.88, 'GT-H': 1.0, 'STI Sport': 1.1, 'STI Sport R': 1.2 } },
-          'フォレスター': { grades: ['Touring', 'X-BREAK', 'Advance', 'SPORT', 'STI Sport'], basePrice: 300, gradeMultiplier: { 'Touring': 0.88, 'X-BREAK': 1.0, 'Advance': 1.08, 'SPORT': 1.12, 'STI Sport': 1.18 } },
-          'インプレッサ': { grades: ['ST', 'ST-G', 'ST-H'], basePrice: 220, gradeMultiplier: { 'ST': 0.9, 'ST-G': 1.0, 'ST-H': 1.1 } },
-          'アウトバック': { grades: ['X-BREAK', 'Limited', 'Limited EX'], basePrice: 350, gradeMultiplier: { 'X-BREAK': 0.95, 'Limited': 1.0, 'Limited EX': 1.1 } }
-        }
-      },
-      'スズキ': {
-        models: {
-          'スイフトスポーツ': { grades: ['ベースグレード', 'セーフティパッケージ'], basePrice: 200, gradeMultiplier: { 'ベースグレード': 1.0, 'セーフティパッケージ': 1.05 } },
-          'ジムニー': { grades: ['XG', 'XL', 'XC'], basePrice: 200, gradeMultiplier: { 'XG': 0.88, 'XL': 1.0, 'XC': 1.12 } },
-          'ジムニーシエラ': { grades: ['JL', 'JC'], basePrice: 220, gradeMultiplier: { 'JL': 0.95, 'JC': 1.08 } },
-          'ハスラー': { grades: ['G', 'X', 'J STYLE'], basePrice: 160, gradeMultiplier: { 'G': 0.9, 'X': 1.0, 'J STYLE': 1.12 } },
-          'スイフト': { grades: ['XG', 'XG Limited', 'RS'], basePrice: 150, gradeMultiplier: { 'XG': 0.9, 'XG Limited': 1.0, 'RS': 1.15 } },
-          'クロスビー': { grades: ['HYBRID MX', 'HYBRID MZ'], basePrice: 180, gradeMultiplier: { 'HYBRID MX': 0.95, 'HYBRID MZ': 1.08 } },
-          'ソリオ': { grades: ['G', 'MX', 'MZ'], basePrice: 180, gradeMultiplier: { 'G': 0.88, 'MX': 1.0, 'MZ': 1.1 } }
-        }
-      },
-      'ダイハツ': {
-        models: {
-          'コペン': { grades: ['Robe', 'XPLAY', 'Cero', 'GR SPORT'], basePrice: 200, gradeMultiplier: { 'Robe': 1.0, 'XPLAY': 1.0, 'Cero': 1.05, 'GR SPORT': 1.2 } },
-          'タント': { grades: ['L', 'X', 'カスタム X', 'カスタム RS', 'ファンクロス'], basePrice: 150, gradeMultiplier: { 'L': 0.85, 'X': 1.0, 'カスタム X': 1.1, 'カスタム RS': 1.2, 'ファンクロス': 1.15 } },
-          'ムーヴ': { grades: ['L', 'X', 'カスタム X', 'カスタム RS'], basePrice: 130, gradeMultiplier: { 'L': 0.88, 'X': 1.0, 'カスタム X': 1.1, 'カスタム RS': 1.2 } },
-          'ロッキー': { grades: ['L', 'X', 'G', 'Premium'], basePrice: 220, gradeMultiplier: { 'L': 0.85, 'X': 1.0, 'G': 1.1, 'Premium': 1.2 } },
-          'タフト': { grades: ['X', 'G', 'Gターボ', 'クロムベンチャー'], basePrice: 170, gradeMultiplier: { 'X': 0.9, 'G': 1.0, 'Gターボ': 1.1, 'クロムベンチャー': 1.08 } }
-        }
-      },
-      '三菱': {
-        models: {
-          'ランサーエボリューション': { grades: ['GSR', 'RS', 'MR', 'Final Edition'], basePrice: 500, gradeMultiplier: { 'GSR': 1.0, 'RS': 0.95, 'MR': 1.15, 'Final Edition': 1.6 } },
-          'デリカD:5': { grades: ['M', 'G', 'G Power Package', 'P', 'JASPER'], basePrice: 350, gradeMultiplier: { 'M': 0.85, 'G': 0.95, 'G Power Package': 1.0, 'P': 1.12, 'JASPER': 1.08 } },
-          'アウトランダー': { grades: ['M', 'G', 'P', 'Black Edition'], basePrice: 350, gradeMultiplier: { 'M': 0.85, 'G': 1.0, 'P': 1.15, 'Black Edition': 1.1 } },
-          'エクリプスクロス': { grades: ['M', 'G', 'P', 'Black Edition'], basePrice: 280, gradeMultiplier: { 'M': 0.88, 'G': 1.0, 'P': 1.12, 'Black Edition': 1.08 } },
-          'パジェロ': { grades: ['GR', 'EXCEED', 'SUPER EXCEED', 'Final Edition'], basePrice: 300, gradeMultiplier: { 'GR': 0.85, 'EXCEED': 1.0, 'SUPER EXCEED': 1.15, 'Final Edition': 1.35 } }
-        }
-      },
-      'レクサス': {
-        models: {
-          'LC': { grades: ['LC500', 'LC500h', 'LC500 S Package'], basePrice: 1200, gradeMultiplier: { 'LC500': 1.0, 'LC500h': 1.05, 'LC500 S Package': 1.1 } },
-          'RC F': { grades: ['ベースグレード', 'Performance Package', 'Carbon Exterior Package'], basePrice: 800, gradeMultiplier: { 'ベースグレード': 1.0, 'Performance Package': 1.1, 'Carbon Exterior Package': 1.2 } },
-          'IS': { grades: ['IS300', 'IS300h', 'IS350', 'IS500 F SPORT Performance'], basePrice: 450, gradeMultiplier: { 'IS300': 0.88, 'IS300h': 0.95, 'IS350': 1.1, 'IS500 F SPORT Performance': 1.4 } },
-          'NX': { grades: ['NX250', 'NX350', 'NX350h', 'NX450h+'], basePrice: 500, gradeMultiplier: { 'NX250': 0.85, 'NX350': 1.0, 'NX350h': 1.1, 'NX450h+': 1.3 } },
-          'RX': { grades: ['RX350', 'RX350h', 'RX450h+', 'RX500h'], basePrice: 650, gradeMultiplier: { 'RX350': 0.88, 'RX350h': 1.0, 'RX450h+': 1.15, 'RX500h': 1.25 } },
-          'LX': { grades: ['LX600 ベースグレード', 'LX600 OFFROAD', 'LX600 Executive'], basePrice: 1200, gradeMultiplier: { 'LX600 ベースグレード': 0.92, 'LX600 OFFROAD': 1.0, 'LX600 Executive': 1.25 } },
-          'UX': { grades: ['UX200', 'UX250h', 'UX300e'], basePrice: 380, gradeMultiplier: { 'UX200': 0.88, 'UX250h': 1.0, 'UX300e': 1.15 } }
-        }
-      },
-      'BMW': {
-        models: {
-          'M3': { grades: ['M3', 'M3 Competition'], basePrice: 900, gradeMultiplier: { 'M3': 1.0, 'M3 Competition': 1.15 } },
-          'M4': { grades: ['M4', 'M4 Competition', 'M4 CSL'], basePrice: 1000, gradeMultiplier: { 'M4': 1.0, 'M4 Competition': 1.12, 'M4 CSL': 1.5 } },
-          '3シリーズ': { grades: ['318i', '320i', '320d', '330i', '330e', 'M340i'], basePrice: 450, gradeMultiplier: { '318i': 0.78, '320i': 0.88, '320d': 0.9, '330i': 1.0, '330e': 1.05, 'M340i': 1.25 } },
-          '5シリーズ': { grades: ['520i', '523d', '530i', '540i', 'M550i'], basePrice: 600, gradeMultiplier: { '520i': 0.82, '523d': 0.9, '530i': 1.0, '540i': 1.15, 'M550i': 1.35 } },
-          'X3': { grades: ['xDrive20i', 'xDrive20d', 'xDrive30i', 'M40i'], basePrice: 500, gradeMultiplier: { 'xDrive20i': 0.88, 'xDrive20d': 0.92, 'xDrive30i': 1.0, 'M40i': 1.3 } },
-          'X5': { grades: ['xDrive35d', 'xDrive40i', 'xDrive45e', 'M50i'], basePrice: 750, gradeMultiplier: { 'xDrive35d': 0.9, 'xDrive40i': 1.0, 'xDrive45e': 1.1, 'M50i': 1.3 } },
-          '1シリーズ': { grades: ['118i', '118d', '120i', 'M135i'], basePrice: 350, gradeMultiplier: { '118i': 0.85, '118d': 0.9, '120i': 1.0, 'M135i': 1.25 } }
-        }
-      },
-      'メルセデス・ベンツ': {
-        models: {
-          'AMG GT': { grades: ['GT 43', 'GT 53', 'GT 63', 'GT 63 S'], basePrice: 1500, gradeMultiplier: { 'GT 43': 0.75, 'GT 53': 0.88, 'GT 63': 1.0, 'GT 63 S': 1.2 } },
-          'Cクラス': { grades: ['C180', 'C200', 'C220d', 'C300', 'AMG C43', 'AMG C63'], basePrice: 450, gradeMultiplier: { 'C180': 0.78, 'C200': 0.88, 'C220d': 0.92, 'C300': 1.0, 'AMG C43': 1.25, 'AMG C63': 1.55 } },
-          'Eクラス': { grades: ['E200', 'E220d', 'E300', 'E350', 'AMG E53'], basePrice: 650, gradeMultiplier: { 'E200': 0.82, 'E220d': 0.88, 'E300': 1.0, 'E350': 1.1, 'AMG E53': 1.35 } },
-          'Sクラス': { grades: ['S400d', 'S500', 'S580', 'AMG S63', 'Maybach S580'], basePrice: 1100, gradeMultiplier: { 'S400d': 0.82, 'S500': 1.0, 'S580': 1.15, 'AMG S63': 1.45, 'Maybach S580': 1.6 } },
-          'GLC': { grades: ['GLC200', 'GLC220d', 'GLC300', 'AMG GLC43', 'AMG GLC63'], basePrice: 550, gradeMultiplier: { 'GLC200': 0.85, 'GLC220d': 0.92, 'GLC300': 1.0, 'AMG GLC43': 1.2, 'AMG GLC63': 1.45 } },
-          'GLE': { grades: ['GLE300d', 'GLE400d', 'GLE450', 'AMG GLE53', 'AMG GLE63 S'], basePrice: 800, gradeMultiplier: { 'GLE300d': 0.82, 'GLE400d': 0.95, 'GLE450': 1.0, 'AMG GLE53': 1.2, 'AMG GLE63 S': 1.5 } },
-          'Aクラス': { grades: ['A180', 'A200d', 'A250', 'AMG A35', 'AMG A45 S'], basePrice: 350, gradeMultiplier: { 'A180': 0.82, 'A200d': 0.92, 'A250': 1.0, 'AMG A35': 1.25, 'AMG A45 S': 1.55 } }
-        }
-      },
-      'フォルクスワーゲン': {
-        models: {
-          'ゴルフ GTI': { grades: ['GTI', 'GTI Clubsport'], basePrice: 380, gradeMultiplier: { 'GTI': 1.0, 'GTI Clubsport': 1.15 } },
-          'ゴルフ R': { grades: ['R', 'R Performance'], basePrice: 500, gradeMultiplier: { 'R': 1.0, 'R Performance': 1.12 } },
-          'ゴルフ': { grades: ['Active Basic', 'Active', 'Style', 'R-Line'], basePrice: 280, gradeMultiplier: { 'Active Basic': 0.85, 'Active': 0.95, 'Style': 1.0, 'R-Line': 1.1 } },
-          'ポロ': { grades: ['Active', 'Style', 'R-Line', 'GTI'], basePrice: 220, gradeMultiplier: { 'Active': 0.88, 'Style': 1.0, 'R-Line': 1.08, 'GTI': 1.3 } },
-          'ティグアン': { grades: ['TSI Active', 'TSI Elegance', 'TSI R-Line', 'TDI R-Line'], basePrice: 400, gradeMultiplier: { 'TSI Active': 0.88, 'TSI Elegance': 1.0, 'TSI R-Line': 1.1, 'TDI R-Line': 1.12 } },
-          'T-Cross': { grades: ['TSI Active', 'TSI Style', 'TSI R-Line'], basePrice: 280, gradeMultiplier: { 'TSI Active': 0.9, 'TSI Style': 1.0, 'TSI R-Line': 1.1 } },
-          'パサート': { grades: ['TSI Elegance', 'TSI Elegance Advance', 'TDI Elegance', 'TDI R-Line'], basePrice: 380, gradeMultiplier: { 'TSI Elegance': 0.92, 'TSI Elegance Advance': 1.0, 'TDI Elegance': 1.05, 'TDI R-Line': 1.12 } }
-        }
-      }
+      'トヨタ': { models: {
+        '86/GR86': P(280),
+        'GRヤリス': P(400),
+        'スープラ': P(550),
+        'GRカローラ': P(480),
+        'アルファード': P(500),
+        'ヴェルファイア': P(480),
+        'ハリアー': P(350),
+        'ランドクルーザー300': P(700),
+        'ランドクルーザー250': P(550),
+        'ランドクルーザー70': P(400),
+        'プリウス': P(250),
+        'クラウン クロスオーバー': P(450),
+        'クラウン スポーツ': P(520),
+        'クラウン セダン': P(700),
+        'カムリ': P(350),
+        'カローラ': P(200),
+        'カローラクロス': P(280),
+        'カローラスポーツ': P(250),
+        'ヤリス': P(180),
+        'ヤリスクロス': P(220),
+        'RAV4': P(320),
+        'C-HR': P(250),
+        'bZ4X': P(550),
+        'ノア': P(280),
+        'ヴォクシー': P(300),
+        'シエンタ': P(200),
+        'アクア': P(200),
+        'ルーミー': P(170),
+        'ハイエース': P(300),
+        'センチュリー': P(2000),
+      }},
+      '日産': { models: {
+        'GT-R': P(1200),
+        'フェアレディZ': P(550),
+        'スカイライン': P(380),
+        'ノート': P(180),
+        'ノート オーラ': P(250),
+        'セレナ': P(300),
+        'エクストレイル': P(300),
+        'リーフ': P(250),
+        'キックス': P(260),
+        'アリア': P(600),
+        'サクラ': P(180),
+        'デイズ': P(140),
+        'NV350 キャラバン': P(300),
+      }},
+      'ホンダ': { models: {
+        'シビック タイプR': P(500),
+        'シビック': P(300),
+        'フィット': P(180),
+        'ヴェゼル': P(280),
+        'ステップワゴン': P(320),
+        'フリード': P(240),
+        'N-BOX': P(160),
+        'N-WGN': P(140),
+        'N-ONE': P(160),
+        'N-VAN': P(150),
+        'S660': P(220),
+        'S2000': P(500),
+        'NSX': P(2500),
+        'ZR-V': P(350),
+        'WR-V': P(230),
+        'CR-V': P(380),
+        'アコード': P(400),
+      }},
+      'マツダ': { models: {
+        'ロードスター': P(300),
+        'ロードスターRF': P(350),
+        'RX-7': P(800),
+        'RX-8': P(200),
+        'MAZDA2': P(170),
+        'MAZDA3': P(250),
+        'MAZDA6': P(320),
+        'CX-3': P(220),
+        'CX-30': P(270),
+        'CX-5': P(300),
+        'CX-8': P(350),
+        'CX-60': P(400),
+        'CX-80': P(480),
+        'MX-30': P(260),
+      }},
+      'スバル': { models: {
+        'WRX STI': P(450),
+        'WRX S4': P(380),
+        'BRZ': P(300),
+        'レヴォーグ': P(300),
+        'フォレスター': P(300),
+        'インプレッサ': P(220),
+        'クロストレック': P(280),
+        'アウトバック': P(350),
+        'ソルテラ': P(580),
+      }},
+      'スズキ': { models: {
+        'スイフトスポーツ': P(200),
+        'スイフト': P(150),
+        'ジムニー': P(200),
+        'ジムニーシエラ': P(220),
+        'ハスラー': P(160),
+        'クロスビー': P(180),
+        'ソリオ': P(180),
+        'エスクード': P(250),
+        'スペーシア': P(150),
+        'アルト': P(110),
+        'エブリイ': P(120),
+      }},
+      'ダイハツ': { models: {
+        'コペン': P(200),
+        'タント': P(150),
+        'ムーヴ': P(130),
+        'ムーヴキャンバス': P(160),
+        'ロッキー': P(220),
+        'タフト': P(170),
+        'ミラ イース': P(90),
+        'アトレー': P(160),
+        'ハイゼット': P(120),
+      }},
+      '三菱': { models: {
+        'ランサーエボリューション': P(500),
+        'デリカD:5': P(350),
+        'デリカミニ': P(190),
+        'アウトランダー PHEV': P(450),
+        'エクリプスクロス': P(280),
+        'パジェロ': P(300),
+        'RVR': P(220),
+        'eKクロスEV': P(180),
+        'eKクロス': P(150),
+        'eKワゴン': P(120),
+        'トライトン': P(400),
+      }},
+      'レクサス': { models: {
+        'LFA': P(8000),
+        'LC': P(1200),
+        'RC F': P(800),
+        'IS': P(450),
+        'ES': P(550),
+        'GS': P(450),
+        'LS': P(1000),
+        'NX': P(500),
+        'RX': P(650),
+        'LX': P(1200),
+        'UX': P(380),
+        'LBX': P(400),
+        'GX': P(1000),
+      }},
+      'BMW': { models: {
+        'M2': P(800),
+        'M3': P(900),
+        'M4': P(1000),
+        'M5': P(1400),
+        'M8': P(1600),
+        '1シリーズ': P(350),
+        '2シリーズ クーペ': P(450),
+        '2シリーズ グランクーペ': P(380),
+        '3シリーズ': P(450),
+        '4シリーズ': P(500),
+        '5シリーズ': P(600),
+        '7シリーズ': P(1200),
+        '8シリーズ': P(1000),
+        'X1': P(400),
+        'X2': P(420),
+        'X3': P(500),
+        'X4': P(550),
+        'X5': P(750),
+        'X6': P(850),
+        'X7': P(1100),
+        'XM': P(1800),
+        'iX': P(1000),
+        'MINI': P(320),
+        'Z4': P(550),
+      }},
+      'メルセデス・ベンツ': { models: {
+        'AMG GT': P(1500),
+        'AMG SL': P(1400),
+        'Aクラス': P(350),
+        'Bクラス': P(330),
+        'Cクラス': P(450),
+        'CLAクラス': P(420),
+        'Eクラス': P(650),
+        'Sクラス': P(1100),
+        'GLA': P(400),
+        'GLB': P(430),
+        'GLC': P(550),
+        'GLE': P(800),
+        'GLS': P(1200),
+        'Gクラス': P(1500),
+        'EQA': P(500),
+        'EQB': P(550),
+        'EQE': P(900),
+        'EQS': P(1300),
+        'Vクラス': P(600),
+      }},
+      'フォルクスワーゲン': { models: {
+        'ゴルフ': P(280),
+        'ゴルフ GTI': P(380),
+        'ゴルフ R': P(500),
+        'ゴルフ ヴァリアント': P(320),
+        'ポロ': P(220),
+        'T-Cross': P(280),
+        'T-Roc': P(350),
+        'ティグアン': P(400),
+        'パサート': P(380),
+        'アルテオン': P(450),
+        'ID.4': P(500),
+        'up!': P(150),
+      }},
+      'アウディ': { models: {
+        'A1': P(280),
+        'A3': P(350),
+        'A4': P(450),
+        'A5': P(500),
+        'A6': P(650),
+        'A7': P(750),
+        'A8': P(1000),
+        'TT': P(450),
+        'R8': P(2200),
+        'Q2': P(320),
+        'Q3': P(400),
+        'Q5': P(550),
+        'Q7': P(800),
+        'Q8': P(1000),
+        'e-tron GT': P(1200),
+        'Q4 e-tron': P(600),
+        'e-tron': P(700),
+      }},
+      'ポルシェ': { models: {
+        '911': P(1500),
+        '718 ケイマン': P(700),
+        '718 ボクスター': P(700),
+        'パナメーラ': P(1100),
+        'カイエン': P(1000),
+        'マカン': P(700),
+        'タイカン': P(1200),
+      }},
+      'ボルボ': { models: {
+        'S60': P(450),
+        'S90': P(650),
+        'V60': P(480),
+        'V90': P(600),
+        'XC40': P(400),
+        'XC60': P(550),
+        'XC90': P(750),
+        'EX30': P(450),
+        'EX90': P(900),
+        'C40': P(500),
+      }},
+      'テスラ': { models: {
+        'Model 3': P(450),
+        'Model Y': P(550),
+        'Model S': P(1000),
+        'Model X': P(1200),
+        'Cybertruck': P(900),
+      }},
+      'ジープ': { models: {
+        'ラングラー': P(500),
+        'グランドチェロキー': P(650),
+        'チェロキー': P(380),
+        'コンパス': P(350),
+        'レネゲード': P(300),
+        'グラディエーター': P(600),
+        'アベンジャー': P(380),
+      }},
+      'ランドローバー': { models: {
+        'レンジローバー': P(1500),
+        'レンジローバー スポーツ': P(1000),
+        'レンジローバー ヴェラール': P(700),
+        'レンジローバー イヴォーク': P(500),
+        'ディフェンダー 90': P(600),
+        'ディフェンダー 110': P(650),
+        'ディフェンダー 130': P(750),
+        'ディスカバリー': P(700),
+        'ディスカバリー スポーツ': P(450),
+      }},
+      'プジョー': { models: {
+        '208': P(250),
+        '308': P(300),
+        '508': P(400),
+        '2008': P(300),
+        '3008': P(380),
+        '5008': P(420),
+        'リフター': P(330),
+      }},
+      'ルノー': { models: {
+        'ルーテシア': P(230),
+        'キャプチャー': P(280),
+        'メガーヌ': P(320),
+        'カングー': P(300),
+        'アルカナ': P(350),
+        'トゥインゴ': P(180),
+      }},
+      'フィアット/アバルト': { models: {
+        'フィアット 500': P(200),
+        'フィアット 500X': P(280),
+        'フィアット パンダ': P(220),
+        'アバルト 595': P(280),
+        'アバルト 695': P(320),
+        'アバルト 500e': P(400),
+      }},
+      'アルファロメオ': { models: {
+        'ジュリア': P(450),
+        'ステルヴィオ': P(500),
+        'トナーレ': P(400),
+      }},
     };
 
     // ========== 初期化 ==========
@@ -565,30 +728,20 @@
     }
 
     function updateGrades() {
-      const maker = document.getElementById('maker').value;
-      const model = document.getElementById('model').value;
-      const gradeSelect = document.getElementById('grade');
-      gradeSelect.innerHTML = '<option value="">選択してください</option>';
+      document.getElementById('grade').value = '';
       hideField('field-grade');
       hideField('field-details');
-      if (maker && model && carDatabase[maker] && carDatabase[maker].models[model]) {
-        const modelData = carDatabase[maker].models[model];
-        modelData.grades.forEach(grade => {
-          const opt = document.createElement('option');
-          opt.value = grade;
-          opt.textContent = grade;
-          gradeSelect.appendChild(opt);
-        });
+      const maker = document.getElementById('maker').value;
+      const model = document.getElementById('model').value;
+      if (maker && model) {
         showField('field-grade');
       }
     }
 
     function showFieldAfterGrade() {
-      const grade = document.getElementById('grade').value;
+      const grade = document.getElementById('grade').value.trim();
       if (grade) {
         showField('field-details');
-      } else {
-        hideField('field-details');
       }
     }
 
@@ -678,12 +831,6 @@
 
       const modelData = data.models[model];
       let base = modelData.basePrice; // 万円
-
-      // グレード補正
-      const grade = document.getElementById('grade').value;
-      if (grade && modelData.gradeMultiplier[grade]) {
-        base = base * modelData.gradeMultiplier[grade];
-      }
 
       // 年式による減価（1年あたり約5-8%）
       const age = 2026 - year;
