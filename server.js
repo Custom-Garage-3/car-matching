@@ -53,100 +53,89 @@ function fetchUrl(url) {
   });
 }
 
-async function scrapeGoonet(maker, model, year) {
+// 価格抽出ヘルパー: "本体価格"に近い価格のみ抽出（広告やローン金額を除外）
+function extractPrices(html) {
+  const prices = [];
+  // 「本体価格」「車両価格」の後に出てくる万円を優先
+  const bodyPricePattern = /(?:本体価格|車両本体価格|車両価格)[^0-9]{0,30}?(\d{1,4}(?:\.\d)?)\s*万円/g;
+  let match;
+  while ((match = bodyPricePattern.exec(html)) !== null) {
+    const price = parseFloat(match[1]);
+    if (price >= 5 && price <= 9999) prices.push(price);
+  }
+  // 本体価格が見つからない場合、一般的な「XX.X万円」パターン
+  if (prices.length === 0) {
+    const generalPattern = /(\d{1,4}\.\d)\s*万円/g;
+    while ((match = generalPattern.exec(html)) !== null) {
+      const price = parseFloat(match[1]);
+      if (price >= 5 && price <= 9999) prices.push(price);
+    }
+  }
+  // 重複除去
+  return [...new Set(prices)];
+}
+
+function computeStats(prices) {
+  if (prices.length === 0) return null;
+  prices.sort((a, b) => a - b);
+  // 外れ値を除去（上下10%をトリム）
+  const trimCount = Math.floor(prices.length * 0.1);
+  const trimmed = prices.length > 5 ? prices.slice(trimCount, prices.length - trimCount) : prices;
+  const median = trimmed[Math.floor(trimmed.length / 2)];
+  const avg = Math.round(trimmed.reduce((a, b) => a + b, 0) / trimmed.length);
+  return {
+    count: prices.length,
+    min: Math.round(prices[0]),
+    max: Math.round(prices[prices.length - 1]),
+    avg,
+    median: Math.round(median),
+  };
+}
+
+async function scrapeGoonet(maker, model, year, mileage) {
   try {
-    // グーネットの検索URLを構築（ブランド名で検索）
-    const query = encodeURIComponent(`${maker} ${model} ${year}年`);
-    const searchUrl = `https://www.goo-net.com/usedcar/spread/goo/13/700/${query}.html`;
+    // グーネットのフリーワード検索URL
+    const query = encodeURIComponent(`${maker} ${model}`);
+    // 年式フィルタ: 前後1年の範囲
+    const yearFrom = year - 1;
+    const yearTo = year + 1;
+    const searchUrl = `https://www.goo-net.com/php/search/summary.php?price_bottom=&price_top=&model_year_bottom=${yearFrom}&model_year_top=${yearTo}&body_type=&keyword=${query}`;
 
-    console.log(`[Scrape] Fetching: ${searchUrl}`);
+    console.log(`[Scrape] Goo-net: ${searchUrl}`);
     const html = await fetchUrl(searchUrl);
-
-    // 価格情報を抽出（正規表現で価格パターンを検索）
-    const prices = [];
-
-    // パターン1: "XX万円" or "XX.X万円"
-    const pricePattern = /(\d{1,4}(?:\.\d)?)\s*万円/g;
-    let match;
-    while ((match = pricePattern.exec(html)) !== null) {
-      const price = parseFloat(match[1]);
-      if (price >= 10 && price <= 9999) { // 妥当な範囲のみ
-        prices.push(price);
-      }
-    }
-
-    // パターン2: "本体価格" 近辺の価格
-    const bodyPricePattern = /本体価格[^0-9]*?(\d{1,4}(?:\.\d)?)\s*万円/g;
-    while ((match = bodyPricePattern.exec(html)) !== null) {
-      const price = parseFloat(match[1]);
-      if (price >= 10 && price <= 9999) prices.push(price);
-    }
+    const prices = extractPrices(html);
 
     if (prices.length === 0) {
       console.log('[Scrape] No prices found in goo-net, trying carsensor...');
-      return await scrapeCarsensor(maker, model, year);
+      return await scrapeCarsensor(maker, model, year, mileage);
     }
 
-    // 統計
-    prices.sort((a, b) => a - b);
-    const median = prices[Math.floor(prices.length / 2)];
-    const min = prices[0];
-    const max = prices[prices.length - 1];
-    const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-
-    console.log(`[Scrape] Found ${prices.length} prices. Min:${min}万 Max:${max}万 Avg:${avg}万 Median:${median}万`);
-
-    return {
-      source: 'goo-net',
-      count: prices.length,
-      min: Math.round(min),
-      max: Math.round(max),
-      avg,
-      median: Math.round(median),
-      prices: prices.slice(0, 20), // 上位20件
-    };
+    const stats = computeStats(prices);
+    console.log(`[Scrape] Goo-net: ${stats.count} prices. Min:${stats.min}万 Max:${stats.max}万 Avg:${stats.avg}万 Median:${stats.median}万`);
+    return { source: 'goo-net', ...stats };
   } catch (err) {
     console.error('[Scrape] Goo-net error:', err.message);
-    return await scrapeCarsensor(maker, model, year);
+    return await scrapeCarsensor(maker, model, year, mileage);
   }
 }
 
-async function scrapeCarsensor(maker, model, year) {
+async function scrapeCarsensor(maker, model, year, mileage) {
   try {
     const query = encodeURIComponent(`${maker} ${model} ${year}`);
     const searchUrl = `https://www.carsensor.net/usedcar/search.php?STID=CS210610&CAESSION=U&KEYWORD=${query}`;
 
-    console.log(`[Scrape] Fetching carsensor: ${searchUrl}`);
+    console.log(`[Scrape] Carsensor: ${searchUrl}`);
     const html = await fetchUrl(searchUrl);
-
-    const prices = [];
-    const pricePattern = /(\d{1,4}(?:\.\d)?)\s*万円/g;
-    let match;
-    while ((match = pricePattern.exec(html)) !== null) {
-      const price = parseFloat(match[1]);
-      if (price >= 10 && price <= 9999) prices.push(price);
-    }
+    const prices = extractPrices(html);
 
     if (prices.length === 0) {
       console.log('[Scrape] No prices found in carsensor either');
       return null;
     }
 
-    prices.sort((a, b) => a - b);
-    const median = prices[Math.floor(prices.length / 2)];
-    const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-
-    console.log(`[Scrape] Carsensor: ${prices.length} prices. Avg:${avg}万 Median:${Math.round(median)}万`);
-
-    return {
-      source: 'carsensor',
-      count: prices.length,
-      min: Math.round(prices[0]),
-      max: Math.round(prices[prices.length - 1]),
-      avg,
-      median: Math.round(median),
-      prices: prices.slice(0, 20),
-    };
+    const stats = computeStats(prices);
+    console.log(`[Scrape] Carsensor: ${stats.count} prices. Avg:${stats.avg}万 Median:${stats.median}万`);
+    return { source: 'carsensor', ...stats };
   } catch (err) {
     console.error('[Scrape] Carsensor error:', err.message);
     return null;
@@ -172,7 +161,7 @@ async function handleDiagnose(req, res) {
   // Step 1: グーネット/カーセンサーから実際の価格を取得
   let marketData = null;
   try {
-    marketData = await scrapeGoonet(maker, model, year);
+    marketData = await scrapeGoonet(maker, model, year, mileage);
   } catch (err) {
     console.error('[Scrape] Failed:', err.message);
   }
@@ -185,12 +174,14 @@ async function handleDiagnose(req, res) {
   }
 
   const marketInfo = marketData
-    ? `\n\n【実際の中古車市場データ（${marketData.source}より取得）】
+    ? `\n\n【実際の中古車市場データ（${marketData.source}より取得、${year}年±1年の同車種）】
 - 掲載台数: ${marketData.count}台
 - 価格帯: ${marketData.min}万円 〜 ${marketData.max}万円
-- 平均価格: ${marketData.avg}万円
+- 平均価格: ${marketData.avg}万円（トリム平均）
 - 中央値: ${marketData.median}万円
-※これは同車種の実際の掲載データです。この情報を重視して価格を算出してください。`
+※この市場データは同車種・近い年式の実際の掲載価格です。
+※ただしグレードや走行距離の違いがあるため、入力された車両条件（${Number(mileage).toLocaleString()}km）に合わせて補正してください。
+※走行距離${Number(mileage).toLocaleString()}kmが平均より多ければ中央値より安く、少なければ高く見積もること。`
     : '\n\n※市場データの取得に失敗しました。あなたの知識から最新の中古車相場を推定してください。';
 
   const prompt = `あなたは日本の中古車市場に精通した査定士です。グーネットやカーセンサーで実際に掲載されている価格帯を熟知しています。
