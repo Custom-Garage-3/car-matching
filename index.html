@@ -833,28 +833,40 @@
       const modelData = data.models[model];
       let base = modelData.basePrice; // 万円
 
-      // 年式による減価（basePriceは3年落ち相当なので、3年目を基準に前後で補正）
+      // 年式による減価（basePriceは3年落ち・3万km相当の店頭価格）
       const age = 2026 - year;
-      const ageDiff = age - 3; // 3年落ちとの差分
-      // リセールが高い車種は減価率が低い
+      const ageDiff = age - 3;
       const isHighResale = /GT-R|ランドクルーザー|ジムニー|タイプR|911|Gクラス|ディフェンダー|アルファード|ヴェルファイア/.test(model);
-      const depreciationRate = isHighResale ? 0.03 : 0.05;
+
       if (ageDiff > 0) {
-        base = base * Math.pow(1 - depreciationRate, ageDiff);
+        // 3年以上: 年数が増えるほど減価が加速
+        const rate = isHighResale ? 0.05 : 0.08;
+        // 10年超えはさらに減価加速
+        const extraAge = Math.max(0, age - 10);
+        base = base * Math.pow(1 - rate, ageDiff) * Math.pow(0.92, extraAge);
       } else if (ageDiff < 0) {
-        base = base * Math.pow(1 + depreciationRate * 0.8, -ageDiff);
+        // 3年未満（高年式）: やや高め
+        base = base * Math.pow(1.04, -ageDiff);
       }
 
-      // 走行距離による減価（3万kmを基準に前後で補正）
+      // 走行距離による減価（3万km基準、10万km超は大幅減価）
       const mileageDiff = (mileage - 30000) / 10000;
-      const mileageFactor = Math.max(0.5, 1 - mileageDiff * 0.018);
+      let mileageFactor = 1 - mileageDiff * 0.022;
+      if (mileage > 100000) mileageFactor *= 0.85; // 10万km超ペナルティ
+      if (mileage > 150000) mileageFactor *= 0.85; // 15万km超さらにペナルティ
+      mileageFactor = Math.max(0.25, Math.min(1.15, mileageFactor));
       base = base * mileageFactor;
 
       // 修復歴
-      if (repair === 'あり') base *= 0.78;
+      if (repair === 'あり') base *= 0.75;
 
-      const shopPrice = Math.round(base);     // 店頭販売価格
-      const tradeIn = Math.round(base * 0.6); // 下取り価格（店頭の約60%）
+      // 最低価格（走行可能な車の最低ライン）
+      base = Math.max(base, 15);
+
+      const shopPrice = Math.round(base);
+      // 下取り率: 高年式は55-60%、古い車は40-50%
+      const tradeInRate = age <= 5 ? 0.58 : age <= 10 ? 0.50 : 0.42;
+      const tradeIn = Math.round(base * tradeInRate);
 
       return { shopPrice, tradeIn };
     }
