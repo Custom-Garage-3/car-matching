@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CarMatch — 愛車を最高値で次のオーナーへ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#111111',
+            accent: '#DC2626',
+            'accent-dark': '#B91C1C',
+            muted: '#6B7280',
+            surface: '#F9FAFB',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&display=swap');
+    * { font-family: 'Noto Sans JP', sans-serif; }
+    body { background: #000; }
+    .step { display: none; }
+    .step.active { display: block; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    input[type="number"] { -moz-appearance: textfield; }
+    .upload-zone { border: 2px dashed #374151; transition: border-color 0.2s; }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #DC2626; }
+    .upload-zone img { max-height: 120px; object-fit: cover; }
+    .fade-in { animation: fadeIn 0.4s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .pulse-red { animation: pulseRed 2s infinite; }
+    @keyframes pulseRed { 0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); } 50% { box-shadow: 0 0 0 12px rgba(220,38,38,0); } }
+    .progress-bar { transition: width 0.5s ease; }
+    .shimmer { background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* 印刷用CSS */
+    @media print {
+      body { background: #fff !important; }
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      #app { max-width: 100% !important; }
+      .step { display: block !important; }
+      #step1, #step2, #stepApiKey { display: none !important; }
+      #step3 { display: block !important; }
+      #resultCard {
+        break-inside: avoid;
+        border: 2px solid #111 !important;
+        background: #fff !important;
+        color: #111 !important;
+      }
+      #resultCard * { color: #111 !important; }
+      .accent-text-print { color: #DC2626 !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-start justify-center">
+  <div id="app" class="w-full max-w-[430px] mx-auto min-h-screen bg-white relative">
+
+    <!-- ヘッダー -->
+    <header class="bg-primary text-white px-5 pt-8 pb-6 no-print">
+      <div class="flex items-center gap-2 mb-1">
+        <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-sm font-bold">C</div>
+        <span class="text-lg font-bold tracking-tight">CarMatch</span>
+      </div>
+      <p class="text-xs text-gray-400 mt-2 tracking-wide">PEER-TO-PEER CAR MATCHING</p>
+      <h1 class="text-xl font-bold mt-3 leading-tight">
+        あなたの愛車、<br>
+        <span class="text-accent">本当の価値</span>で売りませんか？
+      </h1>
+      <p class="text-xs text-gray-400 mt-2 leading-relaxed">
+        ディーラー下取りでは評価されないこだわりも、<br>個人間マッチングなら正当な価格に。
+      </p>
+    </header>
+
+    <!-- プログレスバー -->
+    <div class="bg-gray-100 px-5 py-3 no-print">
+      <div class="flex items-center justify-between text-xs text-muted mb-2">
+        <span id="stepLabel">STEP 1 / 3</span>
+        <span id="stepTitle">車両情報</span>
+      </div>
+      <div class="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
+        <div id="progressBar" class="progress-bar h-full bg-accent rounded-full" style="width: 33%"></div>
+      </div>
+    </div>
+
+    <!-- ========== STEP 1: 車両情報 ========== -->
+    <div id="step1" class="step active fade-in px-5 py-6">
+      <h2 class="text-lg font-bold text-primary mb-1">車両情報を入力</h2>
+      <p class="text-xs text-muted mb-5">まずはお車の基本情報を教えてください</p>
+
+      <!-- メーカー -->
+      <div id="field-maker" class="fade-in">
+        <label class="block text-xs font-medium text-primary mb-1">メーカー</label>
+        <select id="maker" class="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm mb-4 bg-white focus:outline-none focus:border-accent" onchange="updateModels()">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+
+      <!-- 車種 -->
+      <div id="field-model" class="hidden">
+        <label class="block text-xs font-medium text-primary mb-1">車種</label>
+        <select id="model" class="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm mb-4 bg-white focus:outline-none focus:border-accent" onchange="updateGrades()">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+
+      <!-- グレード -->
+      <div id="field-grade" class="hidden">
+        <label class="block text-xs font-medium text-primary mb-1">グレード</label>
+        <select id="grade" class="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm mb-4 bg-white focus:outline-none focus:border-accent" onchange="showFieldAfterGrade()">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+
+      <!-- 年式〜写真（グレード選択後に表示） -->
+      <div id="field-details" class="hidden">
+        <!-- 年式 -->
+        <label class="block text-xs font-medium text-primary mb-1">年式</label>
+        <select id="year" class="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm mb-4 bg-white focus:outline-none focus:border-accent">
+          <option value="">選択してください</option>
+        </select>
+
+        <!-- 走行距離 -->
+        <label class="block text-xs font-medium text-primary mb-1">走行距離</label>
+        <div class="relative mb-4">
+          <input id="mileage" type="number" placeholder="例: 50000" class="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm pr-12 focus:outline-none focus:border-accent">
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">km</span>
+        </div>
+
+        <!-- 修復歴 -->
+        <label class="block text-xs font-medium text-primary mb-1">修復歴</label>
+        <div class="flex gap-3 mb-6">
+          <label class="flex-1 flex items-center justify-center gap-2 border border-gray-300 rounded-lg py-3 cursor-pointer has-[:checked]:border-accent has-[:checked]:bg-red-50">
+            <input type="radio" name="repair" value="なし" checked class="accent-accent">
+            <span class="text-sm">なし</span>
+          </label>
+          <label class="flex-1 flex items-center justify-center gap-2 border border-gray-300 rounded-lg py-3 cursor-pointer has-[:checked]:border-accent has-[:checked]:bg-red-50">
+            <input type="radio" name="repair" value="あり" class="accent-accent">
+            <span class="text-sm">あり</span>
+          </label>
+        </div>
+
+        <!-- 画像アップロード -->
+        <label class="block text-xs font-medium text-primary mb-2">車両写真（任意）</label>
+        <div class="grid grid-cols-3 gap-2 mb-6">
+          <div class="upload-zone rounded-lg p-2 flex flex-col items-center justify-center min-h-[100px] cursor-pointer bg-gray-50" onclick="triggerUpload('img-exterior')" ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(this)" ondrop="handleDrop(event, this, 'img-exterior')">
+            <input type="file" id="img-exterior" accept="image/*" class="hidden" onchange="previewImage(this, this.parentElement)">
+            <div class="text-center" id="img-exterior-placeholder">
+              <div class="text-lg text-gray-400 mb-1">+</div>
+              <div class="text-[10px] text-muted">外装</div>
+            </div>
+          </div>
+          <div class="upload-zone rounded-lg p-2 flex flex-col items-center justify-center min-h-[100px] cursor-pointer bg-gray-50" onclick="triggerUpload('img-interior')" ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(this)" ondrop="handleDrop(event, this, 'img-interior')">
+            <input type="file" id="img-interior" accept="image/*" class="hidden" onchange="previewImage(this, this.parentElement)">
+            <div class="text-center" id="img-interior-placeholder">
+              <div class="text-lg text-gray-400 mb-1">+</div>
+              <div class="text-[10px] text-muted">内装</div>
+            </div>
+          </div>
+          <div class="upload-zone rounded-lg p-2 flex flex-col items-center justify-center min-h-[100px] cursor-pointer bg-gray-50" onclick="triggerUpload('img-meter')" ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(this)" ondrop="handleDrop(event, this, 'img-meter')">
+            <input type="file" id="img-meter" accept="image/*" class="hidden" onchange="previewImage(this, this.parentElement)">
+            <div class="text-center" id="img-meter-placeholder">
+              <div class="text-lg text-gray-400 mb-1">+</div>
+              <div class="text-[10px] text-muted">メーター</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="goToStep(2)" class="w-full bg-primary text-white py-4 rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors">
+        次へ → こだわりを入力
+      </button>
+    </div>
+
+    <!-- ========== STEP 2: こだわりアピール ========== -->
+    <div id="step2" class="step fade-in px-5 py-6">
+      <h2 class="text-lg font-bold text-primary mb-1">こだわりをアピール</h2>
+      <p class="text-xs text-muted mb-5">あなたの愛車の魅力を次のオーナーに伝えましょう</p>
+
+      <!-- カスタムパーツ -->
+      <label class="block text-xs font-medium text-primary mb-1">カスタムパーツの内容</label>
+      <textarea id="customParts" rows="4" placeholder="例: RAYS TE37 18インチ, HKS マフラー, CUSCO 車高調..." class="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm mb-4 resize-none focus:outline-none focus:border-accent"></textarea>
+
+      <!-- 投資額 -->
+      <label class="block text-xs font-medium text-primary mb-1">パーツへの総投資額</label>
+      <div class="relative mb-4">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted">¥</span>
+        <input id="investment" type="number" placeholder="例: 800000" class="w-full border border-gray-300 rounded-lg pl-8 pr-12 py-3 text-sm focus:outline-none focus:border-accent">
+        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">円</span>
+      </div>
+
+      <!-- 愛車への想い -->
+      <label class="block text-xs font-medium text-primary mb-1">次のオーナーに伝えたい愛車への想い</label>
+      <textarea id="message" rows="4" placeholder="例: 週末のドライブが最高に楽しい車です。峠でもサーキットでも最高のパフォーマンスを発揮します..." class="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm mb-6 resize-none focus:outline-none focus:border-accent"></textarea>
+
+      <div class="flex gap-3">
+        <button onclick="goToStep(1)" class="flex-1 border border-gray-300 text-primary py-4 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors">
+          ← 戻る
+        </button>
+        <button onclick="goToStep(3)" class="flex-[2] bg-primary text-white py-4 rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors">
+          次へ → 価格診断
+        </button>
+      </div>
+    </div>
+
+    <!-- ========== STEP 3: シミュレーション ========== -->
+    <div id="step3" class="step fade-in px-5 py-6">
+      <h2 class="text-lg font-bold text-primary mb-1">損得シミュレーション</h2>
+      <p class="text-xs text-muted mb-5">AI が中古車市場の相場データを分析し、あなたの車の適正価格を算出します</p>
+
+      <!-- 診断ボタン -->
+      <button id="diagnoseBtn" onclick="runDiagnosis()" class="w-full bg-accent text-white py-4 rounded-xl font-bold text-sm hover:bg-accent-dark transition-colors pulse-red mb-6 no-print">
+        AI で価格を診断する
+      </button>
+
+      <!-- ローディング -->
+      <div id="loading" class="hidden mb-6">
+        <div class="bg-gray-900 rounded-xl p-6 text-center">
+          <div class="inline-block w-8 h-8 border-2 border-white border-t-accent rounded-full animate-spin mb-3"></div>
+          <p class="text-white text-sm font-medium">AI が市場データを分析中...</p>
+          <p class="text-gray-400 text-xs mt-1">グーネット・カーセンサーの相場を確認しています</p>
+          <div class="mt-4 space-y-2">
+            <div class="shimmer h-4 rounded w-full"></div>
+            <div class="shimmer h-4 rounded w-3/4"></div>
+            <div class="shimmer h-4 rounded w-1/2"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 結果カード -->
+      <div id="resultCard" class="hidden">
+        <div class="bg-gray-900 rounded-xl overflow-hidden">
+          <!-- ヘッダー -->
+          <div class="bg-primary px-5 py-4 border-b border-gray-800">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-gray-400 text-[10px] tracking-widest">MARKET ANALYSIS</p>
+                <p id="resultCarName" class="text-white font-bold text-lg mt-1"></p>
+              </div>
+              <div class="text-right">
+                <p class="text-gray-400 text-[10px]" id="resultYear"></p>
+                <p class="text-gray-400 text-[10px]" id="resultMileage"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 価格比較 -->
+          <div class="p-5 space-y-4">
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="text-gray-400 text-[10px] tracking-wide">店頭販売価格（A）</p>
+                <p id="priceA" class="text-white font-bold text-2xl mt-1"></p>
+              </div>
+              <div class="text-[10px] text-gray-500 bg-gray-800 px-2 py-1 rounded">市場相場</div>
+            </div>
+
+            <div class="border-t border-gray-800"></div>
+
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="text-gray-400 text-[10px] tracking-wide">一般下取り価格（B）</p>
+                <p id="priceB" class="text-white font-bold text-2xl mt-1"></p>
+              </div>
+              <div class="text-[10px] text-gray-500 bg-gray-800 px-2 py-1 rounded">ディーラー査定</div>
+            </div>
+
+            <div class="border-t border-gray-800"></div>
+
+            <!-- 損失額 -->
+            <div class="bg-red-950/50 border border-red-900/50 rounded-xl p-4">
+              <p class="text-red-400 text-[10px] tracking-wide mb-1">あなたの損失額（A − B）</p>
+              <p id="lossAmount" class="text-accent font-black text-3xl"></p>
+              <p class="text-red-400 text-[10px] mt-1" id="lossComment"></p>
+            </div>
+
+            <!-- カスタムパーツ考慮 -->
+            <div id="customValueSection" class="bg-gray-800/50 rounded-xl p-4 hidden">
+              <p class="text-gray-400 text-[10px] tracking-wide mb-1">カスタムパーツ投資額</p>
+              <p id="customInvestment" class="text-white font-bold text-lg"></p>
+              <p class="text-gray-400 text-[10px] mt-1">→ 下取りではほぼ0円評価。個人間なら価値が伝わります。</p>
+            </div>
+
+            <!-- AI分析コメント -->
+            <div id="aiCommentSection" class="bg-gray-800/50 rounded-xl p-4">
+              <p class="text-gray-400 text-[10px] tracking-wide mb-2">AI 分析コメント</p>
+              <p id="aiComment" class="text-gray-300 text-xs leading-relaxed"></p>
+            </div>
+
+            <!-- 推奨マッチング価格 -->
+            <div class="bg-gradient-to-r from-accent/20 to-red-900/20 border border-accent/30 rounded-xl p-4">
+              <p class="text-red-300 text-[10px] tracking-wide mb-1">推奨マッチング価格</p>
+              <p id="matchPrice" class="text-white font-black text-3xl"></p>
+              <p class="text-red-300 text-[10px] mt-1">下取りより高く、店頭より安い。Win-Win の価格帯</p>
+            </div>
+          </div>
+
+          <!-- こだわりセクション（結果内） -->
+          <div id="resultPassionSection" class="px-5 pb-5 hidden">
+            <div class="bg-gray-800/50 rounded-xl p-4">
+              <p class="text-gray-400 text-[10px] tracking-wide mb-2">オーナーのこだわり</p>
+              <p id="resultParts" class="text-gray-300 text-xs leading-relaxed mb-2"></p>
+              <p id="resultMessage" class="text-gray-300 text-xs leading-relaxed italic"></p>
+            </div>
+          </div>
+
+          <!-- CTAボタン -->
+          <div class="px-5 pb-5 space-y-3 no-print">
+            <button onclick="startMatching()" class="w-full bg-accent text-white py-4 rounded-xl font-bold text-sm hover:bg-accent-dark transition-colors pulse-red">
+              この価格でマッチングを開始する
+            </button>
+            <button onclick="saveResult()" class="w-full border border-gray-700 text-gray-300 py-3 rounded-xl text-xs hover:bg-gray-800 transition-colors">
+              結果を保存（スクリーンショット用に印刷表示）
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 戻るボタン -->
+      <button onclick="goToStep(2)" class="w-full border border-gray-300 text-primary py-4 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors mt-4 no-print">
+        ← 入力内容を修正する
+      </button>
+    </div>
+
+    <!-- マッチング開始完了 -->
+    <div id="stepComplete" class="step fade-in px-5 py-6">
+      <div class="text-center py-12">
+        <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
+          <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-primary mb-2">マッチング登録完了！</h2>
+        <p class="text-sm text-muted mb-6 leading-relaxed">
+          あなたの愛車情報が登録されました。<br>
+          興味を持った購入希望者からTikTokの<br>メッセージで連絡が届きます。
+        </p>
+        <div class="bg-gray-100 rounded-xl p-4 mb-6">
+          <p class="text-xs text-muted mb-1">出品TikTokアカウント</p>
+          <p class="text-sm font-bold text-primary">@carmatch_jp</p>
+          <p class="text-[10px] text-muted mt-2">このアカウントに購入希望者からDMが届きます</p>
+        </div>
+        <button onclick="saveResult()" class="w-full border border-gray-300 text-primary py-3 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+          結果を保存する
+        </button>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer class="bg-gray-50 px-5 py-6 text-center no-print">
+      <p class="text-[10px] text-muted">
+        CarMatch は個人間の中古車取引をサポートするマッチングサービスです。<br>
+        価格はAI による推定値であり、実際の取引価格を保証するものではありません。
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    // ========== 車種データベース ==========
+    const carDatabase = {
+      'トヨタ': {
+        models: {
+          '86': { grades: ['G', 'GT', 'GT Limited', 'GR SPORT'], basePrice: 280, gradeMultiplier: { 'G': 0.85, 'GT': 1.0, 'GT Limited': 1.1, 'GR SPORT': 1.2 } },
+          'GRヤリス': { grades: ['RS', 'RZ', 'RZ High Performance', 'モリゾウエディション'], basePrice: 400, gradeMultiplier: { 'RS': 0.8, 'RZ': 1.0, 'RZ High Performance': 1.15, 'モリゾウエディション': 1.4 } },
+          'スープラ': { grades: ['SZ', 'SZ-R', 'RZ'], basePrice: 550, gradeMultiplier: { 'SZ': 0.8, 'SZ-R': 0.95, 'RZ': 1.15 } },
+          'アルファード': { grades: ['X', 'Z', 'Z Premium', 'Executive Lounge'], basePrice: 500, gradeMultiplier: { 'X': 0.8, 'Z': 1.0, 'Z Premium': 1.15, 'Executive Lounge': 1.5 } },
+          'ヴェルファイア': { grades: ['Z Premier', 'Z Premier Executive Lounge'], basePrice: 480, gradeMultiplier: { 'Z Premier': 1.0, 'Z Premier Executive Lounge': 1.4 } },
+          'ハリアー': { grades: ['S', 'G', 'G Leather Package', 'Z', 'Z Leather Package'], basePrice: 350, gradeMultiplier: { 'S': 0.85, 'G': 1.0, 'G Leather Package': 1.08, 'Z': 1.12, 'Z Leather Package': 1.2 } },
+          'ランドクルーザー': { grades: ['GX', 'AX', 'VX', 'ZX', 'GR SPORT'], basePrice: 700, gradeMultiplier: { 'GX': 0.85, 'AX': 0.95, 'VX': 1.05, 'ZX': 1.2, 'GR SPORT': 1.3 } },
+          'プリウス': { grades: ['X', 'G', 'G HEV', 'Z', 'Z HEV'], basePrice: 250, gradeMultiplier: { 'X': 0.85, 'G': 1.0, 'G HEV': 1.05, 'Z': 1.12, 'Z HEV': 1.18 } },
+          'クラウン': { grades: ['X', 'G', 'G Advanced', 'RS', 'RS Advanced'], basePrice: 450, gradeMultiplier: { 'X': 0.85, 'G': 1.0, 'G Advanced': 1.1, 'RS': 1.15, 'RS Advanced': 1.25 } },
+          'カローラ': { grades: ['X', 'G', 'W×B'], basePrice: 200, gradeMultiplier: { 'X': 0.9, 'G': 1.0, 'W×B': 1.1 } },
+          'ヤリス': { grades: ['X', 'G', 'Z'], basePrice: 180, gradeMultiplier: { 'X': 0.9, 'G': 1.0, 'Z': 1.12 } },
+          'RAV4': { grades: ['X', 'G', 'G Z Package', 'Adventure'], basePrice: 320, gradeMultiplier: { 'X': 0.88, 'G': 1.0, 'G Z Package': 1.1, 'Adventure': 1.15 } },
+          'C-HR': { grades: ['S', 'G', 'G-T'], basePrice: 250, gradeMultiplier: { 'S': 0.9, 'G': 1.0, 'G-T': 1.1 } },
+          'ノア': { grades: ['X', 'G', 'S-G', 'S-Z'], basePrice: 280, gradeMultiplier: { 'X': 0.88, 'G': 1.0, 'S-G': 1.08, 'S-Z': 1.15 } },
+          'ヴォクシー': { grades: ['S-G', 'S-Z'], basePrice: 300, gradeMultiplier: { 'S-G': 1.0, 'S-Z': 1.12 } }
+        }
+      },
+      '日産': {
+        models: {
+          'GT-R': { grades: ['Pure Edition', 'Black Edition', 'Premium Edition', 'NISMO', 'T-spec'], basePrice: 1200, gradeMultiplier: { 'Pure Edition': 0.9, 'Black Edition': 1.0, 'Premium Edition': 1.1, 'NISMO': 1.5, 'T-spec': 1.35 } },
+          'フェアレディZ': { grades: ['ベースグレード', 'Version S', 'Version T', 'Version ST', 'NISMO'], basePrice: 550, gradeMultiplier: { 'ベースグレード': 0.85, 'Version S': 0.95, 'Version T': 1.0, 'Version ST': 1.1, 'NISMO': 1.35 } },
+          'スカイライン': { grades: ['GT', 'GT Type SP', 'GT Type P', '400R'], basePrice: 380, gradeMultiplier: { 'GT': 0.9, 'GT Type SP': 1.0, 'GT Type P': 1.05, '400R': 1.3 } },
+          'ノート': { grades: ['X', 'F', 'S', 'AUTECH'], basePrice: 180, gradeMultiplier: { 'X': 1.0, 'F': 0.88, 'S': 0.92, 'AUTECH': 1.15 } },
+          'セレナ': { grades: ['X', 'XV', 'ハイウェイスター', 'ハイウェイスターV', 'AUTECH', 'NISMO'], basePrice: 300, gradeMultiplier: { 'X': 0.85, 'XV': 0.95, 'ハイウェイスター': 1.0, 'ハイウェイスターV': 1.1, 'AUTECH': 1.15, 'NISMO': 1.2 } },
+          'エクストレイル': { grades: ['S', 'X', 'G', 'AUTECH'], basePrice: 300, gradeMultiplier: { 'S': 0.88, 'X': 1.0, 'G': 1.12, 'AUTECH': 1.18 } },
+          'リーフ': { grades: ['X', 'G', 'e+ X', 'e+ G', 'NISMO'], basePrice: 250, gradeMultiplier: { 'X': 0.9, 'G': 1.0, 'e+ X': 1.15, 'e+ G': 1.25, 'NISMO': 1.2 } },
+          'キックス': { grades: ['X', 'X ツートンインテリアエディション', 'AUTECH'], basePrice: 260, gradeMultiplier: { 'X': 1.0, 'X ツートンインテリアエディション': 1.05, 'AUTECH': 1.12 } },
+          'アリア': { grades: ['B6', 'B6 Limited', 'B9', 'B9 e-4ORCE'], basePrice: 600, gradeMultiplier: { 'B6': 0.88, 'B6 Limited': 1.0, 'B9': 1.1, 'B9 e-4ORCE': 1.25 } }
+        }
+      },
+      'ホンダ': {
+        models: {
+          'シビック タイプR': { grades: ['タイプR'], basePrice: 500, gradeMultiplier: { 'タイプR': 1.0 } },
+          'シビック': { grades: ['LX', 'EX'], basePrice: 300, gradeMultiplier: { 'LX': 0.92, 'EX': 1.08 } },
+          'フィット': { grades: ['BASIC', 'HOME', 'NESS', 'CROSSTAR', 'LUXE', 'RS'], basePrice: 180, gradeMultiplier: { 'BASIC': 0.85, 'HOME': 1.0, 'NESS': 1.05, 'CROSSTAR': 1.1, 'LUXE': 1.12, 'RS': 1.18 } },
+          'ヴェゼル': { grades: ['G', 'X', 'Z', 'PLaY'], basePrice: 280, gradeMultiplier: { 'G': 0.88, 'X': 1.0, 'Z': 1.1, 'PLaY': 1.2 } },
+          'ステップワゴン': { grades: ['AIR', 'SPADA', 'SPADA PREMIUM LINE'], basePrice: 320, gradeMultiplier: { 'AIR': 0.9, 'SPADA': 1.0, 'SPADA PREMIUM LINE': 1.15 } },
+          'フリード': { grades: ['B', 'G', 'CROSSTAR'], basePrice: 240, gradeMultiplier: { 'B': 0.88, 'G': 1.0, 'CROSSTAR': 1.1 } },
+          'N-BOX': { grades: ['ベースグレード', 'L', 'EX', 'Custom L', 'Custom EX'], basePrice: 160, gradeMultiplier: { 'ベースグレード': 0.88, 'L': 1.0, 'EX': 1.08, 'Custom L': 1.12, 'Custom EX': 1.2 } },
+          'S660': { grades: ['α', 'β', 'Modulo X'], basePrice: 220, gradeMultiplier: { 'α': 1.1, 'β': 1.0, 'Modulo X': 1.3 } },
+          'NSX': { grades: ['ベースグレード', 'Type S'], basePrice: 2500, gradeMultiplier: { 'ベースグレード': 1.0, 'Type S': 1.3 } },
+          'ZR-V': { grades: ['X', 'Z'], basePrice: 350, gradeMultiplier: { 'X': 0.92, 'Z': 1.08 } }
+        }
+      },
+      'マツダ': {
+        models: {
+          'ロードスター': { grades: ['S', 'S Special Package', 'S Leather Package', 'RS', 'NR-A'], basePrice: 300, gradeMultiplier: { 'S': 0.88, 'S Special Package': 1.0, 'S Leather Package': 1.08, 'RS': 1.2, 'NR-A': 1.05 } },
+          'RX-7': { grades: ['Type R', 'Type RB', 'Type RS', 'Spirit R'], basePrice: 800, gradeMultiplier: { 'Type R': 1.0, 'Type RB': 1.05, 'Type RS': 1.15, 'Spirit R': 1.5 } },
+          'RX-8': { grades: ['ベースグレード', 'Type S', 'Type RS', 'Spirit R'], basePrice: 200, gradeMultiplier: { 'ベースグレード': 0.85, 'Type S': 1.0, 'Type RS': 1.1, 'Spirit R': 1.3 } },
+          'MAZDA3': { grades: ['15S', '20S', 'X', 'X L Package'], basePrice: 250, gradeMultiplier: { '15S': 0.85, '20S': 1.0, 'X': 1.1, 'X L Package': 1.18 } },
+          'CX-5': { grades: ['S', 'S Proactive', 'L Package', 'Exclusive Mode', 'Sports Appearance'], basePrice: 300, gradeMultiplier: { 'S': 0.88, 'S Proactive': 1.0, 'L Package': 1.1, 'Exclusive Mode': 1.2, 'Sports Appearance': 1.15 } },
+          'CX-8': { grades: ['S', 'S Proactive', 'L Package', 'Exclusive Mode'], basePrice: 350, gradeMultiplier: { 'S': 0.88, 'S Proactive': 1.0, 'L Package': 1.1, 'Exclusive Mode': 1.2 } },
+          'CX-60': { grades: ['25S S Package', '25S L Package', 'XD S Package', 'XD L Package', 'XD Premium Sports', 'PHEV'], basePrice: 400, gradeMultiplier: { '25S S Package': 0.85, '25S L Package': 0.95, 'XD S Package': 1.0, 'XD L Package': 1.1, 'XD Premium Sports': 1.25, 'PHEV': 1.35 } }
+        }
+      },
+      'スバル': {
+        models: {
+          'WRX STI': { grades: ['STI', 'STI Type S', 'STI EJ20 Final Edition'], basePrice: 450, gradeMultiplier: { 'STI': 1.0, 'STI Type S': 1.15, 'STI EJ20 Final Edition': 1.5 } },
+          'WRX S4': { grades: ['GT', 'GT-H', 'STI Sport', 'STI Sport R'], basePrice: 380, gradeMultiplier: { 'GT': 0.9, 'GT-H': 1.0, 'STI Sport': 1.12, 'STI Sport R': 1.2 } },
+          'BRZ': { grades: ['R', 'S', 'STI Sport'], basePrice: 300, gradeMultiplier: { 'R': 0.9, 'S': 1.0, 'STI Sport': 1.15 } },
+          'レヴォーグ': { grades: ['GT', 'GT-H', 'STI Sport', 'STI Sport R'], basePrice: 300, gradeMultiplier: { 'GT': 0.88, 'GT-H': 1.0, 'STI Sport': 1.1, 'STI Sport R': 1.2 } },
+          'フォレスター': { grades: ['Touring', 'X-BREAK', 'Advance', 'SPORT', 'STI Sport'], basePrice: 300, gradeMultiplier: { 'Touring': 0.88, 'X-BREAK': 1.0, 'Advance': 1.08, 'SPORT': 1.12, 'STI Sport': 1.18 } },
+          'インプレッサ': { grades: ['ST', 'ST-G', 'ST-H'], basePrice: 220, gradeMultiplier: { 'ST': 0.9, 'ST-G': 1.0, 'ST-H': 1.1 } },
+          'アウトバック': { grades: ['X-BREAK', 'Limited', 'Limited EX'], basePrice: 350, gradeMultiplier: { 'X-BREAK': 0.95, 'Limited': 1.0, 'Limited EX': 1.1 } }
+        }
+      },
+      'スズキ': {
+        models: {
+          'スイフトスポーツ': { grades: ['ベースグレード', 'セーフティパッケージ'], basePrice: 200, gradeMultiplier: { 'ベースグレード': 1.0, 'セーフティパッケージ': 1.05 } },
+          'ジムニー': { grades: ['XG', 'XL', 'XC'], basePrice: 200, gradeMultiplier: { 'XG': 0.88, 'XL': 1.0, 'XC': 1.12 } },
+          'ジムニーシエラ': { grades: ['JL', 'JC'], basePrice: 220, gradeMultiplier: { 'JL': 0.95, 'JC': 1.08 } },
+          'ハスラー': { grades: ['G', 'X', 'J STYLE'], basePrice: 160, gradeMultiplier: { 'G': 0.9, 'X': 1.0, 'J STYLE': 1.12 } },
+          'スイフト': { grades: ['XG', 'XG Limited', 'RS'], basePrice: 150, gradeMultiplier: { 'XG': 0.9, 'XG Limited': 1.0, 'RS': 1.15 } },
+          'クロスビー': { grades: ['HYBRID MX', 'HYBRID MZ'], basePrice: 180, gradeMultiplier: { 'HYBRID MX': 0.95, 'HYBRID MZ': 1.08 } },
+          'ソリオ': { grades: ['G', 'MX', 'MZ'], basePrice: 180, gradeMultiplier: { 'G': 0.88, 'MX': 1.0, 'MZ': 1.1 } }
+        }
+      },
+      'ダイハツ': {
+        models: {
+          'コペン': { grades: ['Robe', 'XPLAY', 'Cero', 'GR SPORT'], basePrice: 200, gradeMultiplier: { 'Robe': 1.0, 'XPLAY': 1.0, 'Cero': 1.05, 'GR SPORT': 1.2 } },
+          'タント': { grades: ['L', 'X', 'カスタム X', 'カスタム RS', 'ファンクロス'], basePrice: 150, gradeMultiplier: { 'L': 0.85, 'X': 1.0, 'カスタム X': 1.1, 'カスタム RS': 1.2, 'ファンクロス': 1.15 } },
+          'ムーヴ': { grades: ['L', 'X', 'カスタム X', 'カスタム RS'], basePrice: 130, gradeMultiplier: { 'L': 0.88, 'X': 1.0, 'カスタム X': 1.1, 'カスタム RS': 1.2 } },
+          'ロッキー': { grades: ['L', 'X', 'G', 'Premium'], basePrice: 220, gradeMultiplier: { 'L': 0.85, 'X': 1.0, 'G': 1.1, 'Premium': 1.2 } },
+          'タフト': { grades: ['X', 'G', 'Gターボ', 'クロムベンチャー'], basePrice: 170, gradeMultiplier: { 'X': 0.9, 'G': 1.0, 'Gターボ': 1.1, 'クロムベンチャー': 1.08 } }
+        }
+      },
+      '三菱': {
+        models: {
+          'ランサーエボリューション': { grades: ['GSR', 'RS', 'MR', 'Final Edition'], basePrice: 500, gradeMultiplier: { 'GSR': 1.0, 'RS': 0.95, 'MR': 1.15, 'Final Edition': 1.6 } },
+          'デリカD:5': { grades: ['M', 'G', 'G Power Package', 'P', 'JASPER'], basePrice: 350, gradeMultiplier: { 'M': 0.85, 'G': 0.95, 'G Power Package': 1.0, 'P': 1.12, 'JASPER': 1.08 } },
+          'アウトランダー': { grades: ['M', 'G', 'P', 'Black Edition'], basePrice: 350, gradeMultiplier: { 'M': 0.85, 'G': 1.0, 'P': 1.15, 'Black Edition': 1.1 } },
+          'エクリプスクロス': { grades: ['M', 'G', 'P', 'Black Edition'], basePrice: 280, gradeMultiplier: { 'M': 0.88, 'G': 1.0, 'P': 1.12, 'Black Edition': 1.08 } },
+          'パジェロ': { grades: ['GR', 'EXCEED', 'SUPER EXCEED', 'Final Edition'], basePrice: 300, gradeMultiplier: { 'GR': 0.85, 'EXCEED': 1.0, 'SUPER EXCEED': 1.15, 'Final Edition': 1.35 } }
+        }
+      },
+      'レクサス': {
+        models: {
+          'LC': { grades: ['LC500', 'LC500h', 'LC500 S Package'], basePrice: 1200, gradeMultiplier: { 'LC500': 1.0, 'LC500h': 1.05, 'LC500 S Package': 1.1 } },
+          'RC F': { grades: ['ベースグレード', 'Performance Package', 'Carbon Exterior Package'], basePrice: 800, gradeMultiplier: { 'ベースグレード': 1.0, 'Performance Package': 1.1, 'Carbon Exterior Package': 1.2 } },
+          'IS': { grades: ['IS300', 'IS300h', 'IS350', 'IS500 F SPORT Performance'], basePrice: 450, gradeMultiplier: { 'IS300': 0.88, 'IS300h': 0.95, 'IS350': 1.1, 'IS500 F SPORT Performance': 1.4 } },
+          'NX': { grades: ['NX250', 'NX350', 'NX350h', 'NX450h+'], basePrice: 500, gradeMultiplier: { 'NX250': 0.85, 'NX350': 1.0, 'NX350h': 1.1, 'NX450h+': 1.3 } },
+          'RX': { grades: ['RX350', 'RX350h', 'RX450h+', 'RX500h'], basePrice: 650, gradeMultiplier: { 'RX350': 0.88, 'RX350h': 1.0, 'RX450h+': 1.15, 'RX500h': 1.25 } },
+          'LX': { grades: ['LX600 ベースグレード', 'LX600 OFFROAD', 'LX600 Executive'], basePrice: 1200, gradeMultiplier: { 'LX600 ベースグレード': 0.92, 'LX600 OFFROAD': 1.0, 'LX600 Executive': 1.25 } },
+          'UX': { grades: ['UX200', 'UX250h', 'UX300e'], basePrice: 380, gradeMultiplier: { 'UX200': 0.88, 'UX250h': 1.0, 'UX300e': 1.15 } }
+        }
+      },
+      'BMW': {
+        models: {
+          'M3': { grades: ['M3', 'M3 Competition'], basePrice: 900, gradeMultiplier: { 'M3': 1.0, 'M3 Competition': 1.15 } },
+          'M4': { grades: ['M4', 'M4 Competition', 'M4 CSL'], basePrice: 1000, gradeMultiplier: { 'M4': 1.0, 'M4 Competition': 1.12, 'M4 CSL': 1.5 } },
+          '3シリーズ': { grades: ['318i', '320i', '320d', '330i', '330e', 'M340i'], basePrice: 450, gradeMultiplier: { '318i': 0.78, '320i': 0.88, '320d': 0.9, '330i': 1.0, '330e': 1.05, 'M340i': 1.25 } },
+          '5シリーズ': { grades: ['520i', '523d', '530i', '540i', 'M550i'], basePrice: 600, gradeMultiplier: { '520i': 0.82, '523d': 0.9, '530i': 1.0, '540i': 1.15, 'M550i': 1.35 } },
+          'X3': { grades: ['xDrive20i', 'xDrive20d', 'xDrive30i', 'M40i'], basePrice: 500, gradeMultiplier: { 'xDrive20i': 0.88, 'xDrive20d': 0.92, 'xDrive30i': 1.0, 'M40i': 1.3 } },
+          'X5': { grades: ['xDrive35d', 'xDrive40i', 'xDrive45e', 'M50i'], basePrice: 750, gradeMultiplier: { 'xDrive35d': 0.9, 'xDrive40i': 1.0, 'xDrive45e': 1.1, 'M50i': 1.3 } },
+          '1シリーズ': { grades: ['118i', '118d', '120i', 'M135i'], basePrice: 350, gradeMultiplier: { '118i': 0.85, '118d': 0.9, '120i': 1.0, 'M135i': 1.25 } }
+        }
+      },
+      'メルセデス・ベンツ': {
+        models: {
+          'AMG GT': { grades: ['GT 43', 'GT 53', 'GT 63', 'GT 63 S'], basePrice: 1500, gradeMultiplier: { 'GT 43': 0.75, 'GT 53': 0.88, 'GT 63': 1.0, 'GT 63 S': 1.2 } },
+          'Cクラス': { grades: ['C180', 'C200', 'C220d', 'C300', 'AMG C43', 'AMG C63'], basePrice: 450, gradeMultiplier: { 'C180': 0.78, 'C200': 0.88, 'C220d': 0.92, 'C300': 1.0, 'AMG C43': 1.25, 'AMG C63': 1.55 } },
+          'Eクラス': { grades: ['E200', 'E220d', 'E300', 'E350', 'AMG E53'], basePrice: 650, gradeMultiplier: { 'E200': 0.82, 'E220d': 0.88, 'E300': 1.0, 'E350': 1.1, 'AMG E53': 1.35 } },
+          'Sクラス': { grades: ['S400d', 'S500', 'S580', 'AMG S63', 'Maybach S580'], basePrice: 1100, gradeMultiplier: { 'S400d': 0.82, 'S500': 1.0, 'S580': 1.15, 'AMG S63': 1.45, 'Maybach S580': 1.6 } },
+          'GLC': { grades: ['GLC200', 'GLC220d', 'GLC300', 'AMG GLC43', 'AMG GLC63'], basePrice: 550, gradeMultiplier: { 'GLC200': 0.85, 'GLC220d': 0.92, 'GLC300': 1.0, 'AMG GLC43': 1.2, 'AMG GLC63': 1.45 } },
+          'GLE': { grades: ['GLE300d', 'GLE400d', 'GLE450', 'AMG GLE53', 'AMG GLE63 S'], basePrice: 800, gradeMultiplier: { 'GLE300d': 0.82, 'GLE400d': 0.95, 'GLE450': 1.0, 'AMG GLE53': 1.2, 'AMG GLE63 S': 1.5 } },
+          'Aクラス': { grades: ['A180', 'A200d', 'A250', 'AMG A35', 'AMG A45 S'], basePrice: 350, gradeMultiplier: { 'A180': 0.82, 'A200d': 0.92, 'A250': 1.0, 'AMG A35': 1.25, 'AMG A45 S': 1.55 } }
+        }
+      },
+      'フォルクスワーゲン': {
+        models: {
+          'ゴルフ GTI': { grades: ['GTI', 'GTI Clubsport'], basePrice: 380, gradeMultiplier: { 'GTI': 1.0, 'GTI Clubsport': 1.15 } },
+          'ゴルフ R': { grades: ['R', 'R Performance'], basePrice: 500, gradeMultiplier: { 'R': 1.0, 'R Performance': 1.12 } },
+          'ゴルフ': { grades: ['Active Basic', 'Active', 'Style', 'R-Line'], basePrice: 280, gradeMultiplier: { 'Active Basic': 0.85, 'Active': 0.95, 'Style': 1.0, 'R-Line': 1.1 } },
+          'ポロ': { grades: ['Active', 'Style', 'R-Line', 'GTI'], basePrice: 220, gradeMultiplier: { 'Active': 0.88, 'Style': 1.0, 'R-Line': 1.08, 'GTI': 1.3 } },
+          'ティグアン': { grades: ['TSI Active', 'TSI Elegance', 'TSI R-Line', 'TDI R-Line'], basePrice: 400, gradeMultiplier: { 'TSI Active': 0.88, 'TSI Elegance': 1.0, 'TSI R-Line': 1.1, 'TDI R-Line': 1.12 } },
+          'T-Cross': { grades: ['TSI Active', 'TSI Style', 'TSI R-Line'], basePrice: 280, gradeMultiplier: { 'TSI Active': 0.9, 'TSI Style': 1.0, 'TSI R-Line': 1.1 } },
+          'パサート': { grades: ['TSI Elegance', 'TSI Elegance Advance', 'TDI Elegance', 'TDI R-Line'], basePrice: 380, gradeMultiplier: { 'TSI Elegance': 0.92, 'TSI Elegance Advance': 1.0, 'TDI Elegance': 1.05, 'TDI R-Line': 1.12 } }
+        }
+      }
+    };
+
+    // ========== 初期化 ==========
+    function init() {
+      // メーカー一覧
+      const makerSelect = document.getElementById('maker');
+      Object.keys(carDatabase).forEach(maker => {
+        const opt = document.createElement('option');
+        opt.value = maker;
+        opt.textContent = maker;
+        makerSelect.appendChild(opt);
+      });
+
+      // 年式（2005〜2026）
+      const yearSelect = document.getElementById('year');
+      for (let y = 2026; y >= 2005; y--) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y + '年';
+        yearSelect.appendChild(opt);
+      }
+
+    }
+
+    function showField(id) {
+      const el = document.getElementById(id);
+      if (el.classList.contains('hidden')) {
+        el.classList.remove('hidden');
+        el.classList.remove('fade-in');
+        void el.offsetWidth;
+        el.classList.add('fade-in');
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    function hideField(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function updateModels() {
+      const maker = document.getElementById('maker').value;
+      const modelSelect = document.getElementById('model');
+      const gradeSelect = document.getElementById('grade');
+      modelSelect.innerHTML = '<option value="">選択してください</option>';
+      gradeSelect.innerHTML = '<option value="">選択してください</option>';
+      hideField('field-model');
+      hideField('field-grade');
+      hideField('field-details');
+      if (maker && carDatabase[maker]) {
+        Object.keys(carDatabase[maker].models).forEach(model => {
+          const opt = document.createElement('option');
+          opt.value = model;
+          opt.textContent = model;
+          modelSelect.appendChild(opt);
+        });
+        showField('field-model');
+      }
+    }
+
+    function updateGrades() {
+      const maker = document.getElementById('maker').value;
+      const model = document.getElementById('model').value;
+      const gradeSelect = document.getElementById('grade');
+      gradeSelect.innerHTML = '<option value="">選択してください</option>';
+      hideField('field-grade');
+      hideField('field-details');
+      if (maker && model && carDatabase[maker] && carDatabase[maker].models[model]) {
+        const modelData = carDatabase[maker].models[model];
+        modelData.grades.forEach(grade => {
+          const opt = document.createElement('option');
+          opt.value = grade;
+          opt.textContent = grade;
+          gradeSelect.appendChild(opt);
+        });
+        showField('field-grade');
+      }
+    }
+
+    function showFieldAfterGrade() {
+      const grade = document.getElementById('grade').value;
+      if (grade) {
+        showField('field-details');
+      } else {
+        hideField('field-details');
+      }
+    }
+
+
+    // ========== ステップ遷移 ==========
+    let currentStep = 1;
+    const stepInfo = {
+      1: { label: 'STEP 1 / 3', title: '車両情報', progress: 33 },
+      2: { label: 'STEP 2 / 3', title: 'こだわりアピール', progress: 66 },
+      3: { label: 'STEP 3 / 3', title: '価格診断', progress: 100 },
+    };
+
+    function goToStep(n) {
+      // バリデーション
+      if (n === 2 && currentStep === 1) {
+        if (!document.getElementById('maker').value || !document.getElementById('model').value || !document.getElementById('year').value || !document.getElementById('mileage').value) {
+          alert('車両情報をすべて入力してください。');
+          return;
+        }
+      }
+
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      const stepEl = document.getElementById(n === 4 ? 'stepComplete' : `step${n}`);
+      stepEl.classList.add('active');
+
+      // ステップ3に戻った時、診断ボタンと結果をリセット
+      if (n === 3) {
+        document.getElementById('diagnoseBtn').classList.remove('hidden');
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('resultCard').classList.add('hidden');
+      }
+      stepEl.classList.remove('fade-in');
+      void stepEl.offsetWidth;
+      stepEl.classList.add('fade-in');
+      currentStep = n;
+
+      if (stepInfo[n]) {
+        document.getElementById('stepLabel').textContent = stepInfo[n].label;
+        document.getElementById('stepTitle').textContent = stepInfo[n].title;
+        document.getElementById('progressBar').style.width = stepInfo[n].progress + '%';
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ========== 画像アップロード ==========
+    function triggerUpload(id) {
+      document.getElementById(id).click();
+    }
+
+    function previewImage(input, zone) {
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const placeholder = zone.querySelector('[id$="-placeholder"]');
+          if (placeholder) placeholder.style.display = 'none';
+          let img = zone.querySelector('img');
+          if (!img) {
+            img = document.createElement('img');
+            img.className = 'w-full h-full object-cover rounded';
+            zone.appendChild(img);
+          }
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+
+    function handleDragOver(e, zone) {
+      e.preventDefault();
+      zone.classList.add('dragover');
+    }
+    function handleDragLeave(zone) {
+      zone.classList.remove('dragover');
+    }
+    function handleDrop(e, zone, inputId) {
+      e.preventDefault();
+      zone.classList.remove('dragover');
+      const input = document.getElementById(inputId);
+      input.files = e.dataTransfer.files;
+      previewImage(input, zone);
+    }
+
+    // ========== 内蔵価格計算 ==========
+    function calculateFallbackPrice(maker, model, year, mileage, repair) {
+      const data = carDatabase[maker];
+      if (!data || !data.models[model]) return null;
+
+      const modelData = data.models[model];
+      let base = modelData.basePrice; // 万円
+
+      // グレード補正
+      const grade = document.getElementById('grade').value;
+      if (grade && modelData.gradeMultiplier[grade]) {
+        base = base * modelData.gradeMultiplier[grade];
+      }
+
+      // 年式による減価（1年あたり約5-8%）
+      const age = 2026 - year;
+      const depreciationRate = model.includes('GT-R') || model.includes('ランドクルーザー') || model.includes('ジムニー') || model.includes('タイプR') ? 0.04 : 0.07;
+      base = base * Math.pow(1 - depreciationRate, age);
+
+      // 走行距離による減価（1万kmあたり約2-3%）
+      const mileageFactor = Math.max(0.4, 1 - (mileage / 10000) * 0.025);
+      base = base * mileageFactor;
+
+      // 修復歴
+      if (repair === 'あり') base *= 0.75;
+
+      const shopPrice = Math.round(base);     // 店頭販売価格
+      const tradeIn = Math.round(base * 0.55); // 下取り価格（店頭の約55%）
+
+      return { shopPrice, tradeIn };
+    }
+
+    // ========== Claude API 連携 ==========
+    async function callClaudeAPI(maker, model, year, mileage, repair, customParts, investment) {
+      const grade = document.getElementById('grade').value;
+      try {
+        const res = await fetch('/api/diagnose', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ maker, model, grade, year, mileage, repair, customParts, investment })
+        });
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return await res.json();
+      } catch (e) {
+        console.error('API error:', e);
+      }
+      return null;
+    }
+
+    // ========== 診断実行 ==========
+    async function runDiagnosis() {
+      const maker = document.getElementById('maker').value;
+      const model = document.getElementById('model').value;
+      const year = parseInt(document.getElementById('year').value);
+      const mileage = parseInt(document.getElementById('mileage').value);
+      const repair = document.querySelector('input[name="repair"]:checked').value;
+      const customParts = document.getElementById('customParts').value;
+      const investment = document.getElementById('investment').value;
+      const message = document.getElementById('message').value;
+
+      // UI切り替え
+      document.getElementById('diagnoseBtn').classList.add('hidden');
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('resultCard').classList.add('hidden');
+
+      // Claude API を試行、失敗時はフォールバック
+      let result = await callClaudeAPI(maker, model, year, mileage, repair, customParts, investment);
+      let comment = '';
+
+      if (result) {
+        comment = result.comment || '';
+      } else {
+        result = calculateFallbackPrice(maker, model, year, mileage, repair);
+        if (!result) {
+          result = { shopPrice: 200, tradeIn: 110 };
+        }
+        comment = `${year}年式 ${maker} ${model}（${mileage.toLocaleString()}km）の概算です。より正確な査定にはClaude APIキーを設定してください。`;
+      }
+
+      const shopPrice = result.shopPrice;
+      const tradeIn = result.tradeIn;
+      const loss = shopPrice - tradeIn;
+      const matchPrice = Math.round(tradeIn + (shopPrice - tradeIn) * 0.5);
+
+      // 結果を表示
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('resultCard').classList.remove('hidden');
+      document.getElementById('resultCard').classList.remove('fade-in');
+      void document.getElementById('resultCard').offsetWidth;
+      document.getElementById('resultCard').classList.add('fade-in');
+
+      const gradeVal = document.getElementById('grade').value;
+      document.getElementById('resultCarName').textContent = `${maker} ${model}` + (gradeVal ? ` ${gradeVal}` : '');
+      document.getElementById('resultYear').textContent = `${year}年式`;
+      document.getElementById('resultMileage').textContent = `${mileage.toLocaleString()}km`;
+      document.getElementById('priceA').textContent = `¥${shopPrice.toLocaleString()}万`;
+      document.getElementById('priceB').textContent = `¥${tradeIn.toLocaleString()}万`;
+      document.getElementById('lossAmount').textContent = `−¥${loss.toLocaleString()}万`;
+      document.getElementById('lossComment').textContent = `下取りに出すと約${loss}万円も損をする可能性があります`;
+      document.getElementById('matchPrice').textContent = `¥${matchPrice.toLocaleString()}万`;
+      document.getElementById('aiComment').textContent = comment;
+
+      // カスタムパーツ投資額
+      if (investment && parseInt(investment) > 0) {
+        document.getElementById('customValueSection').classList.remove('hidden');
+        document.getElementById('customInvestment').textContent = `¥${parseInt(investment).toLocaleString()}`;
+      }
+
+      // こだわり
+      if (customParts || message) {
+        document.getElementById('resultPassionSection').classList.remove('hidden');
+        document.getElementById('resultParts').textContent = customParts || '';
+        document.getElementById('resultMessage').textContent = message ? `「${message}」` : '';
+      }
+
+      // 結果エリアまでスクロール
+      document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ========== マッチング開始 ==========
+    function startMatching() {
+      goToStep(4);
+    }
+
+    // ========== 結果保存（印刷） ==========
+    function saveResult() {
+      window.print();
+    }
+
+    // ========== 起動 ==========
+    init();
+  </script>
+</body>
+</html>
